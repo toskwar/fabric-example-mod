@@ -10,7 +10,7 @@
   "environment": "client",
   "entrypoints": {
     "client": [
-      "com.example.spawner.FunTimeSpawnerClient"
+    "com.example.spawner.EndstoneSpawnerClient"
     ]
   },
   "depends": {
