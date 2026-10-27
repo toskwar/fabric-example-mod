@@ -1,4 +1,4 @@
-package com.example.spawner;
+package com.example; // Проверьте, что тут указан именно ваш пакет проекта
 
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
@@ -20,19 +20,20 @@ import net.minecraft.util.ActionResult;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.RotationAxis;
 
-import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 
-public class EndstoneSpawnerClient implements ClientModInitializer {
+public class ExampleModClient implements ClientModInitializer {
 
     private static CreeperEntity chargedCreeper;
-    private static final List<BlockPos> nearbyEndStones = new ArrayList<>();
+    private static final List<BlockPos> nearbyEndStones = new CopyOnWriteArrayList<>();
     private static float rotationTicks = 0.0f;
 
     @Override
     public void onInitializeClient() {
+        System.out.println("[SpawnerMod] Клиент запущен с новыми эффектами спавнера!");
 
-        // 1. Звук удара спавнера при клике по эндерняку
+        // 1. Звук удара по спавнеру при клике/замахе
         AttackBlockCallback.EVENT.register((player, world, hand, pos, direction) -> {
             if (world.isClient && world.getBlockState(pos).isOf(Blocks.END_STONE)) {
                 world.playSound(pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5,
@@ -41,37 +42,33 @@ public class EndstoneSpawnerClient implements ClientModInitializer {
             return ActionResult.PASS;
         });
 
-        // 2. Звук ломания спавнера при разрушении эндерняка
-        PlayerBlockBreakEvents.BEFORE.register((world, player, pos, state, blockEntity) -> {
+        // 2. Звук разрушения спавнера ровно в момент, когда эндерняк доломали (Исправлено под 1.21.4)
+        PlayerBlockBreakEvents.AFTER.register((world, player, pos, state, blockEntity) -> {
             if (world.isClient && state.isOf(Blocks.END_STONE)) {
                 world.playSound(pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5,
                         SoundEvents.BLOCK_SPAWNER_BREAK, SoundCategory.BLOCKS, 1.0f, 1.0f, false);
             }
-            return true;
         });
 
-        // 3. Сканирование блоков эндерняка вокруг + Заряженный крипер + Частицы
+        // 3. Сканирование блоков + Потокобезопасность + Частицы
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             if (client.world == null || client.player == null) return;
 
-            // Скорость вращения моба
-            rotationTicks += 10.0f;
+            rotationTicks += 5.0f;
 
-            // Создаем сущность фантомного заряженного крипера для рендера
             if (chargedCreeper == null) {
-                // Передаем SpawnReason.TRIGGERED вторым аргументом (Исправление №1)
+                // Адаптировано под 1.21.4 (Добавлен SpawnReason)
                 chargedCreeper = EntityType.CREEPER.create(client.world, SpawnReason.TRIGGERED);
                 if (chargedCreeper != null) {
-                    // Заряжаем через запись NBT, так как CHARGED приватный (Исправление №2)
+                    // Адаптировано под 1.21.4 (Обход приватного поля CHARGED через NBT)
                     NbtCompound nbt = new NbtCompound();
                     nbt.putBoolean("powered", true);
                     chargedCreeper.readNbt(nbt);
                 }
             }
 
-            // Поиск блоков Эндерняка каждые 15 тиков в радиусе 12 блоков
             if (client.world.getTime() % 15 == 0) {
-                nearbyEndStones.clear();
+                List<BlockPos> tempFound = new java.util.ArrayList<>();
                 BlockPos playerPos = client.player.getBlockPos();
                 int radius = 12;
 
@@ -80,16 +77,17 @@ public class EndstoneSpawnerClient implements ClientModInitializer {
                         for (int z = -radius; z <= radius; z++) {
                             BlockPos checkPos = playerPos.add(x, y, z);
                             if (client.world.getBlockState(checkPos).isOf(Blocks.END_STONE)) {
-                                nearbyEndStones.add(checkPos);
+                                tempFound.add(checkPos);
                             }
                         }
                     }
                 }
+                nearbyEndStones.clear();
+                nearbyEndStones.addAll(tempFound);
             }
 
-            // Частицы пламени и дыма, как у стандартного спавнера
             for (BlockPos pos : nearbyEndStones) {
-                if (client.world.random.nextInt(3) == 0) {
+                if (client.world.random.nextInt(5) == 0) {
                     double px = pos.getX() + client.world.random.nextDouble();
                     double py = pos.getY() + client.world.random.nextDouble();
                     double pz = pos.getZ() + client.world.random.nextDouble();
@@ -100,7 +98,7 @@ public class EndstoneSpawnerClient implements ClientModInitializer {
             }
         });
 
-        // 4. Отрисовка (Рендеринг) вращающегося Крипера внутри блоков
+        // 4. Отрисовка под углом 45° и уменьшение моба
         WorldRenderEvents.AFTER_ENTITIES.register(context -> {
             MinecraftClient client = MinecraftClient.getInstance();
             if (client.world == null || chargedCreeper == null || nearbyEndStones.isEmpty()) return;
@@ -116,23 +114,30 @@ public class EndstoneSpawnerClient implements ClientModInitializer {
             for (BlockPos pos : nearbyEndStones) {
                 matrices.push();
 
-                // Центрируем крипера внутри блока эндерняка
-                matrices.translate(pos.getX() - camX + 0.5, pos.getY() - camY + 0.2, pos.getZ() - camZ + 0.5);
+                // Центрируем моба в спавнере
+                matrices.translate(pos.getX() - camX + 0.5, pos.getY() - camY + 0.18, pos.getZ() - camZ + 0.5);
 
-                // Уменьшаем размер моба под габариты спавнера
-                matrices.scale(0.4f, 0.4f, 0.4f);
+                // Новые пропорции: уменьшили размер на 20% (0.32f)
+                matrices.scale(0.32f, 0.32f, 0.32f);
 
-                // Вращаем вокруг оси Y
+                // Поворот на 45 градусов в бок, как у оригинального спавнера
+                matrices.multiply(RotationAxis.POSITIVE_X.rotationDegrees(45.0f));
+                matrices.multiply(RotationAxis.POSITIVE_Z.rotationDegrees(15.0f));
+
+                // Основное вращение вокруг своей оси Y
                 matrices.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(rotationTicks));
 
-                // Рендерим моба — удален лишний аргумент tickDelta (Исправление №3)
+                // Обновляем позицию сущности во избежание багов рендера 1.21.4
+                chargedCreeper.setPos(pos.getX() + 0.5, pos.getY() + 0.18, pos.getZ() + 0.5);
+
+                // Рендер (Сигнатура адаптирована под 1.21.4 — удален лишний tickDelta)
                 client.getEntityRenderDispatcher().render(
                         chargedCreeper,
                         0.0, 0.0, 0.0,
                         0.0f,
                         matrices,
                         consumers,
-                        15728880 // Максимальная освещенность
+                        15728880
                 );
 
                 matrices.pop();
