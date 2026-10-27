@@ -47,13 +47,13 @@ public class FunTimeSpawnerClient implements ClientModInitializer {
             return true;
         });
 
-        // 3. Сканирование блоков и частицы
+        // 3. Сканирование блоков и частицы дыма/пламени
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             if (client.world == null || client.player == null) return;
 
             rotationTicks += 15.0f;
 
-            // Каждые 20 тиков ищем эндерняк в радиусе 16 блоков
+            // Каждые 20 тиков обновляем список эндерняка вокруг игрока (радиус 16 блоков)
             if (client.world.getTime() % 20 == 0) {
                 nearbyEndStones.clear();
                 BlockPos playerPos = client.player.getBlockPos();
@@ -71,7 +71,7 @@ public class FunTimeSpawnerClient implements ClientModInitializer {
                 }
             }
 
-            // Спавн частиц пламени и дыма
+            // Спавн частиц спавнера вокруг найденного Эндерняка
             for (BlockPos pos : nearbyEndStones) {
                 if (client.world.random.nextInt(4) == 0) {
                     double px = pos.getX() + client.world.random.nextDouble();
@@ -84,7 +84,7 @@ public class FunTimeSpawnerClient implements ClientModInitializer {
             }
         });
 
-        // 4. Отрисовка крипера внутри блоков эндерняка
+        // 4. Отрисовка (Рендер) крипера внутри блоков Эндерняка
         WorldRenderEvents.AFTER_ENTITIES.register(context -> {
             MinecraftClient client = MinecraftClient.getInstance();
             if (client.world == null || nearbyEndStones.isEmpty()) return;
@@ -93,38 +93,38 @@ public class FunTimeSpawnerClient implements ClientModInitializer {
             VertexConsumerProvider consumers = context.consumers();
             if (consumers == null) return;
 
-            // Ленивая инициализация фантомного крипера для рендера
+            // Корректное создание сущности на клиенте для 1.21.4 через конструктор
             if (clientCreeper == null) {
-                clientCreeper = EntityType.CREEPER.create(client.world);
-                if (clientCreeper != null) {
-                    clientCreeper.setCharged(true); // Включаем ауру молний
-                }
+                clientCreeper = new CreeperEntity(EntityType.CREEPER, client.world);
             }
-
-            if (clientCreeper == null) return;
 
             double camX = context.camera().getPos().x;
             double camY = context.camera().getPos().y;
             double camZ = context.camera().getPos().z;
+            
+            // В 1.21.4 получаем дельту кадра
             float tickDelta = context.tickCounter().getTickDelta(true);
 
             for (BlockPos pos : nearbyEndStones) {
                 matrices.push();
                 
-                // Центрируем крипера внутри блока
+                // Смещаем координату рендера к центру блока относительно камеры
                 matrices.translate(pos.getX() - camX + 0.5, pos.getY() - camY + 0.15, pos.getZ() - camZ + 0.5);
+                
+                // Масштабируем крипера под размеры спавнера
                 matrices.scale(0.45f, 0.45f, 0.45f);
+                
+                // Вращаем крипера во времени
                 matrices.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(rotationTicks));
 
-                // Передаем саму сущность крипера в диспетчер — это работает на всех версиях 1.21.x
+                // Исправленный вызов метода render под 8 аргументов в Minecraft 1.21.4
                 client.getEntityRenderDispatcher().render(
                         clientCreeper,
                         0.0, 0.0, 0.0,
-                        0.0f,
                         tickDelta,
                         matrices,
                         consumers,
-                        15728880
+                        15728880 // Полное освещение
                 );
 
                 matrices.pop();
