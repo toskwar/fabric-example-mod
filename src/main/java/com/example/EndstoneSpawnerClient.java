@@ -10,8 +10,9 @@ import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.render.VertexConsumerProvider;
 import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.entity.EntityType;
-import net.minecraft.entity.data.DataTracker;
+import net.minecraft.entity.SpawnReason;
 import net.minecraft.entity.mob.CreeperEntity;
+import net.minecraft.nbt.NbtCompound;
 import net.minecraft.particle.ParticleTypes;
 import net.minecraft.sound.SoundCategory;
 import net.minecraft.sound.SoundEvents;
@@ -58,10 +59,13 @@ public class EndstoneSpawnerClient implements ClientModInitializer {
 
             // Создаем сущность фантомного заряженного крипера для рендера
             if (chargedCreeper == null) {
-                chargedCreeper = EntityType.CREEPER.create(client.world);
+                // Передаем SpawnReason.TRIGGERED вторым аргументом (Исправление №1)
+                chargedCreeper = EntityType.CREEPER.create(client.world, SpawnReason.TRIGGERED);
                 if (chargedCreeper != null) {
-                    // Включаем синюю ауру молнии корректным для клиента способом в 1.21.4
-                    chargedCreeper.getDataTracker().set(CreeperEntity.CHARGED, true);
+                    // Заряжаем через запись NBT, так как CHARGED приватный (Исправление №2)
+                    NbtCompound nbt = new NbtCompound();
+                    nbt.putBoolean("powered", true);
+                    chargedCreeper.readNbt(nbt);
                 }
             }
 
@@ -108,7 +112,6 @@ public class EndstoneSpawnerClient implements ClientModInitializer {
             double camX = context.camera().getPos().x;
             double camY = context.camera().getPos().y;
             double camZ = context.camera().getPos().z;
-            float tickDelta = context.tickCounter().getTickDelta(true);
 
             for (BlockPos pos : nearbyEndStones) {
                 matrices.push();
@@ -122,12 +125,11 @@ public class EndstoneSpawnerClient implements ClientModInitializer {
                 // Вращаем вокруг оси Y
                 matrices.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(rotationTicks));
 
-                // Рендерим моба (сигнатура обновлена под 1.21.4)
+                // Рендерим моба — удален лишний аргумент tickDelta (Исправление №3)
                 client.getEntityRenderDispatcher().render(
                         chargedCreeper,
                         0.0, 0.0, 0.0,
                         0.0f,
-                        tickDelta,
                         matrices,
                         consumers,
                         15728880 // Максимальная освещенность
