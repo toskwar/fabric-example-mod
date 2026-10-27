@@ -2,13 +2,11 @@ package com.example.spawner;
 
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
-import net.fabricmc.fabric.api.client.rendering.v1.BlockRenderLayerMap;
 import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderEvents;
 import net.fabricmc.fabric.api.event.player.AttackBlockCallback;
 import net.fabricmc.fabric.api.event.player.PlayerBlockBreakEvents;
 import net.minecraft.block.Blocks;
 import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.render.RenderLayer;
 import net.minecraft.client.render.VertexConsumerProvider;
 import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.entity.EntityType;
@@ -36,9 +34,6 @@ public class EndstoneSpawnerClient implements ClientModInitializer {
     public void onInitializeClient() {
         System.out.println("[SpawnerMod] Мод запущен! Эндерняк теперь выглядит как спавнер.");
 
-        // Включаем прозрачность (Cutout слой) для Эндерняка, чтобы решетка спавнера не имела черного фона
-        BlockRenderLayerMap.INSTANCE.putBlock(Blocks.END_STONE, RenderLayer.getCutout());
-
         // 1. Звук удара по спавнеру при клике
         AttackBlockCallback.EVENT.register((player, world, hand, pos, direction) -> {
             if (world.isClient && world.getBlockState(pos).isOf(Blocks.END_STONE)) {
@@ -63,7 +58,7 @@ public class EndstoneSpawnerClient implements ClientModInitializer {
             rotationTicks += 10.0f;
 
             if (chargedCreeper == null) {
-                // Исправлено под 1.21.4 (добавлен SpawnReason)
+                // Адаптировано под 1.21.4 (добавлен SpawnReason)
                 chargedCreeper = EntityType.CREEPER.create(client.world, SpawnReason.TRIGGERED);
                 if (chargedCreeper != null) {
                     // Исправлено под 1.21.4 (зарядка крипера через NBT)
@@ -132,7 +127,7 @@ public class EndstoneSpawnerClient implements ClientModInitializer {
                 // Вращение во времени
                 matrices.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(rotationTicks));
 
-                // Обновление позиции сущности для стабильного Render State
+                // Обновление позиции сущности для стабильного Render State в 1.21.4
                 chargedCreeper.setPos(pos.getX() + 0.5, pos.getY() + 0.18, pos.getZ() + 0.5);
 
                 // Исправлено под 1.21.4 (удален лишний аргумент tickDelta перед matrices)
